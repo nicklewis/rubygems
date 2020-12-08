@@ -80,7 +80,7 @@ class Gem::Source
   def dependency_resolver_set # :nodoc:
     return Gem::Resolver::IndexSet.new self if 'file' == uri.scheme
 
-    bundler_api_uri = enforce_trailing_slash(uri) + './api/v1/dependencies'
+    bundler_api_uri = enforce_trailing_slash(uri)
 
     begin
       fetcher = Gem::RemoteFetcher.fetcher
@@ -88,7 +88,7 @@ class Gem::Source
     rescue Gem::RemoteFetcher::FetchError
       Gem::Resolver::IndexSet.new self
     else
-      Gem::Resolver::APISet.new response.uri
+      Gem::Resolver::APISet.new response.uri + "./info/"
     end
   end
 

@@ -24,13 +24,13 @@ class Gem::Resolver::APISet < Gem::Resolver::Set
   # API URL +dep_uri+ which is described at
   # https://guides.rubygems.org/rubygems-org-api
 
-  def initialize(dep_uri = 'https://rubygems.org/api/v1/dependencies')
+  def initialize(dep_uri = 'https://index.rubygems.org/info/')
     super()
 
     dep_uri = URI dep_uri unless URI === dep_uri
 
     @dep_uri = dep_uri
-    @uri     = dep_uri + '../..'
+    @uri     = dep_uri + '..'
 
     @data   = Hash.new {|h,k| h[k] = [] }
     @source = Gem::Source.new @uri
@@ -52,7 +52,7 @@ class Gem::Resolver::APISet < Gem::Resolver::Set
     end
 
     versions(req.name).each do |ver|
-      if req.dependency.match? req.name, ver[:number]
+      if req.dependency.match?(req.name, ver[:number]) && metadata_satisfied?(ver[:requirements])
         res << Gem::Resolver::APISpecification.new(self, ver)
       end
     end
@@ -75,20 +75,8 @@ class Gem::Resolver::APISet < Gem::Resolver::Set
   def prefetch_now # :nodoc:
     needed, @to_fetch = @to_fetch, []
 
-    uri = @dep_uri + "?gems=#{needed.sort.join ','}"
-    str = Gem::RemoteFetcher.fetcher.fetch_path uri
-
-    loaded = []
-
-    Marshal.load(str).each do |ver|
-      name = ver[:name]
-
-      @data[name] << ver
-      loaded << name
-    end
-
-    (needed - loaded).each do |missing|
-      @data[missing] = []
+    needed.sort.each do |name|
+      versions(name)
     end
   end
 
@@ -111,13 +99,47 @@ class Gem::Resolver::APISet < Gem::Resolver::Set
       return @data[name]
     end
 
-    uri = @dep_uri + "?gems=#{name}"
+    uri = @dep_uri + name
     str = Gem::RemoteFetcher.fetcher.fetch_path uri
 
-    Marshal.load(str).each do |ver|
-      @data[ver[:name]] << ver
+    lines(str).each do |ver|
+      number, platform, dependencies, requirements = parse_gem(ver)
+
+      platform ||= "ruby"
+      dependencies = dependencies.map {|dep_name, reqs| [dep_name, reqs.join(", ")] }
+      requirements = requirements.map {|req_name, reqs| [req_name.to_sym, reqs] }.to_h
+
+      @data[name] << { name: name, number: number, platform: platform, dependencies: dependencies, requirements: requirements }
     end
 
     @data[name]
+  end
+
+  private
+
+  def lines(str)
+    lines = str.split("\n")
+    header = lines.index("---")
+    header ? lines[header + 1..-1] : lines
+  end
+
+  def parse_gem(string)
+    version_and_platform, rest = string.split(" ", 2)
+    version, platform = version_and_platform.split("-", 2)
+    dependencies, requirements = rest.split("|", 2).map {|s| s.split(",") } if rest
+    dependencies = dependencies ? dependencies.map {|d| parse_dependency(d) } : []
+    requirements = requirements ? requirements.map {|r| parse_dependency(r) } : []
+    [version, platform, dependencies, requirements]
+  end
+
+  def parse_dependency(string)
+    dependency = string.split(":")
+    dependency[-1] = dependency[-1].split("&") if dependency.size > 1
+    dependency
+  end
+
+  def metadata_satisfied?(requirements)
+    Gem::Requirement.new(requirements[:ruby]).satisfied_by?(Gem.ruby_version) &&
+      Gem::Requirement.new(requirements[:rubygems]).satisfied_by?(Gem.rubygems_version)
   end
 end
