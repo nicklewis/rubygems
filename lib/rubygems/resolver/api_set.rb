@@ -52,7 +52,7 @@ class Gem::Resolver::APISet < Gem::Resolver::Set
     end
 
     versions(req.name).each do |ver|
-      if req.dependency.match?(req.name, ver[:number]) && metadata_satisfied?(ver[:requirements])
+      if req.dependency.match?(req.name, ver[:number])
         res << Gem::Resolver::APISpecification.new(self, ver)
       end
     end
@@ -136,10 +136,5 @@ class Gem::Resolver::APISet < Gem::Resolver::Set
     dependency = string.split(":")
     dependency[-1] = dependency[-1].split("&") if dependency.size > 1
     dependency
-  end
-
-  def metadata_satisfied?(requirements)
-    Gem::Requirement.new(requirements[:ruby]).satisfied_by?(Gem.ruby_version) &&
-      Gem::Requirement.new(requirements[:rubygems]).satisfied_by?(Gem.rubygems_version)
   end
 end
