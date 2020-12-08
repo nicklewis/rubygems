@@ -582,7 +582,7 @@ class TestGem < Gem::TestCase
   end
 
   def test_self_default_sources
-    assert_equal %w[https://index.rubygems.org/], Gem.default_sources
+    assert_equal %w[https://rubygems.org/], Gem.default_sources
   end
 
   def test_self_use_gemdeps
